@@ -118,6 +118,7 @@ def generate_answer(query, context):
 You are a helpful assistant.
 Answer ONLY using the context below.
 If the answer is not in the context, say "I don't know".
+Always mention the source file name used for your answer.
 
 Context:
 {context}
