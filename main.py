@@ -9,12 +9,11 @@ from sentence_transformers import SentenceTransformer
 load_dotenv()
 
 client = MilvusClient(uri="milvus_demo.db")
-if client.has_collection(collection_name="test"):
-    client.drop_collection(collection_name="test")
+if client.has_collection(collection_name="data"):
+    client.drop_collection(collection_name="data")
 client.create_collection(
-    collection_name="test",
+    collection_name="data",
     dimension=384,
-
 )
 
 def clean_text(text):
@@ -77,8 +76,6 @@ for doc in raw_docs:
 model = SentenceTransformer("all-MiniLM-L6-v2")
 texts = [d["text"] for d in docs]
 vectors = model.encode(texts)
-print("Loaded docs:", docs)
-print("Number of docs:", len(docs))
 
 data = [
     {"id": i, "vector": vectors[i].tolist(), "text": docs[i]["text"], "source": docs[i]["source"]}
@@ -92,27 +89,41 @@ res = client.insert(collection_name="test", data = data)
 # print(res)
 client.load_collection("test")
 
-def retrieve(query_text, top_k=2):
+def retrieve(query_text, top_k=2, alpha=0.7):
+    # Semantic Search
     query_vector = model.encode([query_text]).tolist()
-
     results = client.search(
         collection_name="test",
         data=query_vector,
-        limit=top_k,
+        limit=top_k*5,
         output_fields=["text", "source"]
     )
+    # Keyword Search + Semantic Search
+    scores = []
+    query_words = set(query_text.lower().split())
 
-    retrieved = [
-        {
-            "text": hit["entity"]["text"],
-            "source": hit["entity"]["source"]
-        }
-        for hit in results[0]
-        if hit["distance"]> 0.3
-    ]
-    return retrieved
+    for hit in results[0]:
+        text = hit["entity"]["text"]
+        source = hit["entity"]["source"]
+        sem_sc = hit["distance"]
+
+        doc_words = set(text.lower().split())
+        kw_score = len(query_words & doc_words) / max(1,len(query_words))
+
+        # Combine both
+        final_score = alpha * (1-sem_sc) + (1-alpha) * kw_score
+        scores.append({
+            "text": text,
+            "source": source,
+            "score": final_score
+        })
+
+    # Sorting
+    scores.sort(key=lambda x: x["score"], reverse=True)
+    return scores[:top_k]
 
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+
 def generate_answer(query, context):
     prompt = f"""
 You are a helpful assistant.
@@ -143,7 +154,7 @@ def chat(query):
     if not context_docs:
         return "I don't know."
 
-    context = "\n".join([doc["text"] for doc in context_docs])
+    context = "\n".join([f"[{doc['source']}] {doc['text']}" for doc in context_docs])
     answer = generate_answer(query, context)
     return answer
 

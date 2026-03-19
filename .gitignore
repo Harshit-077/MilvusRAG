@@ -2,3 +2,5 @@
 .venv
 milvus_demo.db
 __pycache__/
+.idea/
+.milvus_demo.db.lock
