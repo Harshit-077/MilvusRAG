@@ -1,2 +1,4 @@
 .env
 .venv
+milvus_demo.db
+__pycache__/

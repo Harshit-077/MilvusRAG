@@ -147,11 +147,12 @@ def chat(query):
     answer = generate_answer(query, context)
     return answer
 
-while True:
-    q = input("Ask: ")
-    if q.lower() in ["exit", "quit"]:
-        break
-    print(chat(q))
+if __name__ == "__main__":
+    while True:
+        q = input("Ask: ")
+        if q.lower() in ["exit", "quit"]:
+            break
+        print(chat(q))
 
 
 
